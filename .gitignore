@@ -1,0 +1,6 @@
+# LaTeX gunk
+*.aux
+*.log
+
+# PDF output
+*.pdf

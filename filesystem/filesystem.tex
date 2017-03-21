@@ -1,0 +1,82 @@
+\documentclass{article}
+\usepackage{mathtools, amsfonts, amsthm, amssymb, graphicx}
+\usepackage{fancyhdr}
+\usepackage[cm]{fullpage}
+
+\pagestyle{fancy}
+\fancyhf{}
+\chead{}
+\renewcommand{\headrulewidth}{0pt}
+\lfoot{Apricot OS Documentation}
+\rfoot{Filesystem}
+
+\title{Apricot OS Filesystem}
+\author{Nick Stones-Havas}
+\date{\today}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+\section{Preamble}
+The Apricot Filesystem is a simple Filesystem designed to met the many Apricos Architectural constraints. Although it lacks most basic features expected in modern filesystems (such as error recovery, linking, and permissions), it does provide the facility to abstract block-based Apricos disks into a
+more familiar directory/file model.
+
+\section{Disk geomety}
+
+Disks can have a maximum of 32 tracks, each of which contain 64 sectors. One sector contains a total of 256 bytes.
+This gives disks a total raw capacity of 512kb. It should be noted that the first track on any disk is reserved for boot code
+and filesystem metadata, so the total amount of usable space is 496kb across 31 tracks.
+The smallest allocation unit is 1 sector (or 256 bytes).
+
+\section{Space Bitmap}
+
+The bitmap uses one bit per sector on a disk. With '0' being used to show that the sector is free, and '1' to show that it is allocated'.
+In memory, each group of 8 sectors is stored as a byte, with the Least Significant Bit representing the lowest sector,
+and the Most Significant Bit representing the highest. Each subsequent byte in the bitmap represents a group of sectors
+with a higher address than the last.
+
+For instance, if 00000001 is the first byte of the bitmap, then track 0, sector 0 is allocated, while sectors 1-7 are free.
+
+\section{Reserved Track Layout}
+
+The first track of a disk is reserved for both boot code, and disk metadata. The first 62 sectors are reserved for boot code, which can be virtually
+any bootable code.
+
+The 63rd sector is the space bitmap for this disk.
+
+The 64th sector contains information pertaining directly to the disk. The first 4 bytes are always the sequence 0xC0, 0x30, 0x0C, 0x03. This represents the disk
+signature, and must be present for the disk to be valid. The next 8 bytes form a string which represents the name of the disk. The last two bytes form the boot signature,
+which must be 0xAA followed by 0x55 if the disk is bootable. The rest of the space on this sector is undefined, but reserved for later use.
+
+\section{Directory Listings}
+
+A Directory Listing is an array of 8 byte entries, with a maximum length of 32. Each element in this array corresponds to a 'Directory Entry'.
+Each entry represents either another Directory Listing, or a file. The second most significant bit of the first byte of an entry specifies whether the entry is executable
+(1 if it is, 0 otherwise). The third most significant bit of the first byte of an entry specifies whether the entry is another Directory Listing or a file (0 and 1 respectively).
+The 5 least significant bits of the first byte of an entry specify the track that the entry is in. The 6 least significant bits of the second byte specify the sector.
+The next 6 bytes are the name of the entry. The most significant bit of the first byte is always '1'
+
+\section{Files}
+
+A file is a sequence of non-filesystem data. Every file has one sector allocated for file metadata. The first two bytes of metadata specify the size of the
+file in bytes, and up to 254 bytes to specify the track and sector number of each successive chunk of the file. Because this info takes 2 bytes to represent,
+files have a maximum size of 31.75kb.
+
+\section{Loading Disks}
+
+Upon loading a disk, the filesystem driver must do two things:
+
+\begin{enumerate}
+    \item Probe the disk and page track 0, sector 62 into memory. This is the volume information sector.
+        After paging, it must be copied to a non paging area of memory.
+    \item Copy track 0, sector 63 into memory. This is the disk space bitmap.
+        As before, this must be copied to a non paging area of memory.
+\end{enumerate}
+
+\section{Booting}
+
+The job of the stage 1 bootloader is to load the first track, minus two sectors (62 sectors) of a disk into memory, then jump to the first loaded byte.
+A disk is marked as bootable if and only if the last two bytes of the 63rd sector are 0xAA followed by 0x55. Additionally, a stage 1 bootloader should
+reject disks which do not contain the disk signature byte sequence 0xC0, 0x30, 0x0C, 0x03.
+
+\end{document}
